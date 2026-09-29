@@ -18,9 +18,22 @@ jobs:
           git clone --recursive https://github.com/theos/theos.git $THEOS
           echo "THEOS=$THEOS" >> $GITHUB_ENV
 
+      - name: Download iOS SDKs
+        run: |
+          if [ -z "$(ls $HOME/theos/sdks 2>/dev/null)" ]; then
+            cd $HOME/theos/sdks
+            curl -sL -o sdks.zip https://github.com/theos/sdks/archive/refs/heads/master.zip
+            TMPDIR=$(mktemp -d)
+            unzip -q sdks.zip -d "$TMPDIR"
+            mv "$TMPDIR"/sdks-master/*.sdk "$HOME/theos/sdks/"
+            rm -rf sdks.zip "$TMPDIR"
+          fi
+          ls $HOME/theos/sdks
+
       - name: Install Dependencies
         run: |
           brew install ldid dpkg make
+          echo "$(brew --prefix)/opt/make/libexec/gnubin" >> $GITHUB_PATH
 
       - name: Build Tweak
         run: |
