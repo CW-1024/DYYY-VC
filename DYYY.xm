@@ -11323,14 +11323,15 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 - (void)layoutSubviews {
     BOOL shouldHideRelatedSearch = DYYYGetBool(@"DYYYHideInteractionSearch");
-    // 注意：不能用 removeFromSuperview！搜索页视频的信息区（昵称/文案/属地）
-    // 相对这个锚点定位，直接摘掉会断裂布局参照，导致信息区整体上移。
-    // 改用 hidden：视图仍保留在层级中参与布局，只是不可见，信息区位置不受影响；
-    // 且开关关闭后可恢复显示（removeFromSuperview 摘掉后就恢复不了了）。
-    self.hidden = shouldHideRelatedSearch;
-    if (shouldHideRelatedSearch) {
-        return;
-    }
+    // 注意：不能用 removeFromSuperview，也不能用 hidden=YES！
+    // 搜索页视频的信息区（昵称/文案/属地）相对这个锚点定位：
+    // removeFromSuperview 直接摘掉锚点；hidden=YES 会被 AWEElementStackView 折叠不占位，
+    // 两种都会断裂布局参照，导致信息区整体上移（图文页不用此锚点故不受影响）。
+    // 改用 alpha=0：视图不可见但完整参与布局（占位、约束都在），信息区位置不受影响；
+    // userInteractionEnabled=NO 避免透明视图拦截触摸。
+    // 开关关闭后恢复 alpha=1 即可（removeFromSuperview 摘掉后恢复不了）。
+    self.alpha = shouldHideRelatedSearch ? 0 : 1;
+    self.userInteractionEnabled = !shouldHideRelatedSearch;
     %orig;
 }
 
