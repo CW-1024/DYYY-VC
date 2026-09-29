@@ -11322,8 +11322,13 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %hook AWEPlayInteractionSearchAnchorView
 
 - (void)layoutSubviews {
-    if (DYYYGetBool(@"DYYYHideInteractionSearch")) {
-        [self removeFromSuperview];
+    BOOL shouldHideRelatedSearch = DYYYGetBool(@"DYYYHideInteractionSearch");
+    // 注意：不能用 removeFromSuperview！搜索页视频的信息区（昵称/文案/属地）
+    // 相对这个锚点定位，直接摘掉会断裂布局参照，导致信息区整体上移。
+    // 改用 hidden：视图仍保留在层级中参与布局，只是不可见，信息区位置不受影响；
+    // 且开关关闭后可恢复显示（removeFromSuperview 摘掉后就恢复不了了）。
+    self.hidden = shouldHideRelatedSearch;
+    if (shouldHideRelatedSearch) {
         return;
     }
     %orig;
@@ -13048,9 +13053,9 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     BOOL shouldFilterUser = NO;
     BOOL shouldFilterHDR = NO;
 
-    if (isRecommendFeed) {
-        shouldFilterUser = DYYYRecommendationFilterMatchesAuthor(config, aweme.author);
-    }
+    // 用户过滤：initWithDictionary 调用时 referString 尚未由控制器赋值（恒为 nil），
+    // 导致 isRecommendFeed 恒为 NO，用户过滤从未生效。与批量路径保持一致，此处不做 feed 限定。
+    shouldFilterUser = DYYYRecommendationFilterMatchesAuthor(config, aweme.author);
 
     if (isRecommendFeed && config.keywords.count > 0) {
         shouldFilterKeywords = DYYYStringContainsAnyFilterToken(aweme.descriptionString, config.keywords);
