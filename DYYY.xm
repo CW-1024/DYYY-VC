@@ -11321,18 +11321,54 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %hook AWEPlayInteractionSearchAnchorView
 
+// 隐藏相关搜索时，绝对不能动容器本身：
+// removeFromSuperview / hidden=YES / alpha=0 都会被 AWEElementStackView 折叠，
+// 导致搜索页视频的信息区（昵称/文案/属地）失去下方布局约束而整体上移。
+// 策略：递归把容器内所有子视图设为透明，容器保持 alpha=1/hidden=NO 正常占位。
+// 用 associated object 保存原始 alpha，开关关闭时精确恢复。
+static char kDYYYAnchorOrigAlphaKey;
+
+static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide) {
+    for (UIView *subview in view.subviews) {
+        if (hide) {
+            // 保存原始值（只存一次）
+            if (!objc_getAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey)) {
+                objc_setAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey,
+                                         @(subview.alpha), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            subview.alpha = 0;
+        } else {
+            NSNumber *orig = objc_getAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey);
+            subview.alpha = orig ? orig.floatValue : 1;
+            if (orig) objc_setAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        subview.userInteractionEnabled = !hide;
+        DYYYSetViewTreeAlpha(subview, hide); // 递归处理嵌套子视图
+    }
+}
+
+static void DYYYApplySearchAnchorVisibility(UIView *anchor) {
+    BOOL shouldHide = DYYYGetBool(@"DYYYHideInteractionSearch");
+    DYYYSetViewTreeAlpha(anchor, shouldHide);
+    // 容器本身：禁止交互但保持完全可见状态以维持布局占位
+    anchor.userInteractionEnabled = !shouldHide;
+    anchor.alpha = 1;
+    anchor.hidden = NO;
+}
+
 - (void)layoutSubviews {
-    BOOL shouldHideRelatedSearch = DYYYGetBool(@"DYYYHideInteractionSearch");
-    // 注意：不能用 removeFromSuperview，也不能用 hidden=YES！
-    // 搜索页视频的信息区（昵称/文案/属地）相对这个锚点定位：
-    // removeFromSuperview 直接摘掉锚点；hidden=YES 会被 AWEElementStackView 折叠不占位，
-    // 两种都会断裂布局参照，导致信息区整体上移（图文页不用此锚点故不受影响）。
-    // 改用 alpha=0：视图不可见但完整参与布局（占位、约束都在），信息区位置不受影响；
-    // userInteractionEnabled=NO 避免透明视图拦截触摸。
-    // 开关关闭后恢复 alpha=1 即可（removeFromSuperview 摘掉后恢复不了）。
-    self.alpha = shouldHideRelatedSearch ? 0 : 1;
-    self.userInteractionEnabled = !shouldHideRelatedSearch;
     %orig;
+    DYYYApplySearchAnchorVisibility(self);
+}
+
+- (void)didAddSubview:(UIView *)subview {
+    %orig;
+    DYYYApplySearchAnchorVisibility(self);
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    DYYYApplySearchAnchorVisibility(self);
 }
 
 %end
