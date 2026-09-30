@@ -16117,11 +16117,13 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
-            // 整个容器直接透明，frame 保持不变，彻底保留占位不上移
             UIView *container = label.superview;
-            if (container) {
-                container.alpha = 0;
-                container.userInteractionEnabled = NO;
+            if (container && container.alpha != 0) {
+                // 延迟到布局完成后执行，避免在 layout 过程中改视图触发布局重算
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    container.alpha = 0;
+                    container.userInteractionEnabled = NO;
+                });
             }
             return;
         }
