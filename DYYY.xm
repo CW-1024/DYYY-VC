@@ -16174,23 +16174,18 @@ static int DYYYCountTimeLabelsInView(UIView *view) {
     return count;
 }
 
-// 从时间标签往上找：找到包含 >=2 个时间标签的最小祖先，即整个章节条
+// 从时间标签往上找：返回第一个包含 >=2 个时间标签的祖先，即整个章节条
 static UIView *DYYYFindChapterBarContainer(UILabel *timeLabel) {
-    UIView *candidate = timeLabel;
     UIView *current = timeLabel.superview;
     while (current) {
         int count = DYYYCountTimeLabelsInView(current);
         if (count >= 2) {
-            candidate = current; // 包含多个时间标签，继续往上看有没有更大的
-        } else if (candidate != timeLabel) {
-            // 已经找到过包含多个的，当前这个只包含1个（或0个），说明上一层就是章节条
-            break;
+            return current; // 找到就停，不再往上
         }
-        // 防止一直找到根视图：章节条宽度应该接近屏幕宽但不是全屏
         if (current.superview == nil) break;
         current = current.superview;
     }
-    return candidate;
+    return timeLabel; // 没找到，返回 label 本身（调用方会 fallback）
 }
 
 static void DYYYHideChapterProgressBar(UIView *view) {
