@@ -6975,25 +6975,37 @@ static void DYYYStartHideFeedAnchorHookInstaller(void) {
 
 static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
 
-static void DYYYApplyChapterElementVisibility(id element) {
-    BOOL shouldHide = DYYYGetBool(@"DYYYHideChapterProgress");
-    UIView *elementView = DYYYRawElementViewFromElement(element);
-    if (!elementView) {
-        return;
-    }
-    // 放行布局占位，仅透明化内容，避免 AWEElementStackView 坍缩导致上移
-    DYYYSetViewTreeAlpha(elementView, shouldHide);
-    elementView.userInteractionEnabled = !shouldHide;
-    elementView.alpha = 1;
-    elementView.hidden = NO;
-}
-
 %hook AWEPlayInteractionChapterElement
 
 - (void)layoutElementView {
     %orig;
     DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionChapterElement");
-    DYYYApplyChapterElementVisibility(self);
+    // 隐藏章节进度：容器alpha=0，子视图自动继承不可见，但布局占位保留
+    UIView *elementView = DYYYRawElementViewFromElement(self);
+    if (elementView) {
+        BOOL hide = DYYYGetBool(@"DYYYHideChapterProgress");
+        elementView.alpha = hide ? 0 : 1;
+        elementView.userInteractionEnabled = !hide;
+        // 强制：swizzle 该 view 类的 layoutSubviews，每次布局都按住 alpha
+        static const void *kDYYYChapterSwizzledKey = &kDYYYChapterSwizzledKey;
+        Class vc = [elementView class];
+        if (!objc_getAssociatedObject(vc, kDYYYChapterSwizzledKey)) {
+            objc_setAssociatedObject(vc, kDYYYChapterSwizzledKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            SEL sel = @selector(layoutSubviews);
+            Method m = class_getInstanceMethod(vc, sel);
+            if (m) {
+                IMP origImp = method_getImplementation(m);
+                IMP newImp = imp_implementationWithBlock(^void(id _self) {
+                    ((void(*)(id, SEL))origImp)(_self, sel);
+                    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+                        ((UIView *)_self).alpha = 0;
+                        ((UIView *)_self).userInteractionEnabled = NO;
+                    }
+                });
+                method_setImplementation(m, newImp);
+            }
+        }
+    }
 }
 
 %end
@@ -13344,7 +13356,7 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     return %orig;
 }
 
-//章节要点数据放行（视图透明化在 AWEPlayInteractionChapterElement 处理，避免布局坍缩上移）
+//隐藏章节进度：数据放行让视图创建占位，容器alpha=0隐藏（子视图自动继承，不影响布局）
 - (NSArray *)chapterList {
     return %orig;
 }
@@ -16120,15 +16132,13 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
-            // 只清视觉：子视图透明 + 去掉容器边框背景，容器本身保留占位不上移
             UIView *container = label.superview;
+            // 往上找两层，确保把带边框的容器也藏住
+            if (container.superview) {
+                container = container.superview;
+            }
             if (container) {
-                for (UIView *sub in container.subviews) {
-                    sub.alpha = 0;
-                    sub.userInteractionEnabled = NO;
-                }
-                container.layer.borderWidth = 0;
-                container.backgroundColor = [UIColor clearColor];
+                container.alpha = 0;
                 container.userInteractionEnabled = NO;
             }
             return;
@@ -16136,26 +16146,6 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     }
     for (UIView *subview in [view.subviews copy]) {
         DYYYHideVideoAIParseBar(subview);
-    }
-}
-
-// 隐藏章节进度条：按类名定位，持续透明化（viewDidLayoutSubviews 每次调用）
-static void DYYYHideChapterViews(UIView *view) {
-    if (!view) {
-        return;
-    }
-    NSString *className = NSStringFromClass([view class]);
-    if ([className containsString:@"Chapter"] && [className containsString:@"PlayInteraction"]) {
-        // 找到章节视图，透明化所有子视图，容器保持占位
-        for (UIView *sub in view.subviews) {
-            sub.alpha = 0;
-            sub.userInteractionEnabled = NO;
-        }
-        view.userInteractionEnabled = NO;
-        // 不 return，继续递归处理嵌套的 chapter 视图
-    }
-    for (UIView *subview in [view.subviews copy]) {
-        DYYYHideChapterViews(subview);
     }
 }
 
@@ -16189,10 +16179,6 @@ static void DYYYHideChapterViews(UIView *view) {
 
     if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
         DYYYHideVideoAIParseBar(self.view);
-    }
-
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        DYYYHideChapterViews(self.view);
     }
 
     if (self.view.window && !self.view.hidden) {
