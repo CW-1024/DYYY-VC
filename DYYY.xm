@@ -6975,15 +6975,11 @@ static void DYYYStartHideFeedAnchorHookInstaller(void) {
 
 static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
 
-// 存住 chapter element，供 viewDidLayoutSubviews 反复应用透明化
-static id dyyyChapterElement = nil;
-
 %hook AWEPlayInteractionChapterElement
 
 - (void)layoutElementView {
     %orig;
     DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionChapterElement");
-    dyyyChapterElement = self;
 }
 
 %end
@@ -13334,8 +13330,11 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     return %orig;
 }
 
-//隐藏章节进度：数据放行保证视图创建占位，隐藏由 viewDidLayoutSubviews 经 dyyyChapterElement 做透明化
+//隐藏章节进度
 - (NSArray *)chapterList {
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        return @[];
+    }
     return %orig;
 }
 
@@ -16109,7 +16108,7 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     if ([view isKindOfClass:[UILabel class]]) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
-        if (text.length > 0 && [text hasPrefix:@"AI 解析"]) {
+        if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
             UIView *container = label.superview;
             if (container) {
                 for (UIView *sub in container.subviews) {
@@ -16156,18 +16155,6 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
 
     if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
         DYYYHideVideoAIParseBar(self.view);
-    }
-
-    // 隐藏章节进度：经存住的 element 取 view 反复透明化，容器占位保留
-    if (dyyyChapterElement) {
-        BOOL shouldHideChapter = DYYYGetBool(@"DYYYHideChapterProgress");
-        UIView *chapterView = DYYYRawElementViewFromElement(dyyyChapterElement);
-        if (chapterView) {
-            DYYYSetViewTreeAlpha(chapterView, shouldHideChapter);
-            chapterView.userInteractionEnabled = !shouldHideChapter;
-            chapterView.alpha = 1;
-            chapterView.hidden = NO;
-        }
     }
 
     if (self.view.window && !self.view.hidden) {
