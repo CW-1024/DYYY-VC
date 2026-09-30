@@ -9733,12 +9733,21 @@ static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
 %end
 
 // 隐藏观看历史搜索
+// 注意：绝不能在 init 直接返回 nil——该视图是搜索页视频信息区的布局占位成员，
+// 缺失会导致信息区（昵称/文案/属地）整体上移。改为正常创建后透明化内容，容器保留占位。
+static void DYYYApplyDiscoverFeedEntranceVisibility(UIView *entrance);
 %hook AWEDiscoverFeedEntranceView
-- (id)init {
-    if (DYYYGetBool(@"DYYYHideInteractionSearch")) {
-        return nil;
-    }
-    return %orig;
+- (void)layoutSubviews {
+    %orig;
+    DYYYApplyDiscoverFeedEntranceVisibility(self);
+}
+- (void)didAddSubview:(UIView *)subview {
+    %orig;
+    DYYYApplyDiscoverFeedEntranceVisibility(self);
+}
+- (void)didMoveToWindow {
+    %orig;
+    DYYYApplyDiscoverFeedEntranceVisibility(self);
 }
 %end
 
@@ -11319,12 +11328,8 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 %end
 
-%hook AWEPlayInteractionSearchAnchorView
-
-// 隐藏相关搜索时，绝对不能动容器本身：
-// removeFromSuperview / hidden=YES / alpha=0 都会被 AWEElementStackView 折叠，
-// 导致搜索页视频的信息区（昵称/文案/属地）失去下方布局约束而整体上移。
-// 策略：递归把容器内所有子视图设为透明，容器保持 alpha=1/hidden=NO 正常占位。
+// 视图内容透明化 helper：递归把容器内所有子视图设为透明，容器本身保持
+// alpha=1 / hidden=NO 正常占位，避免被 AWEElementStackView 折叠导致布局上移。
 // 用 associated object 保存原始 alpha，开关关闭时精确恢复。
 static char kDYYYAnchorOrigAlphaKey;
 
@@ -11347,28 +11352,13 @@ static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide) {
     }
 }
 
-static void DYYYApplySearchAnchorVisibility(UIView *anchor) {
+static void DYYYApplyDiscoverFeedEntranceVisibility(UIView *entrance) {
     BOOL shouldHide = DYYYGetBool(@"DYYYHideInteractionSearch");
-    DYYYSetViewTreeAlpha(anchor, shouldHide);
+    DYYYSetViewTreeAlpha(entrance, shouldHide);
     // 容器本身：禁止交互但保持完全可见状态以维持布局占位
-    anchor.userInteractionEnabled = !shouldHide;
-    anchor.alpha = 1;
-    anchor.hidden = NO;
-}
-
-- (void)layoutSubviews {
-    %orig;
-    DYYYApplySearchAnchorVisibility(self);
-}
-
-- (void)didAddSubview:(UIView *)subview {
-    %orig;
-    DYYYApplySearchAnchorVisibility(self);
-}
-
-- (void)didMoveToWindow {
-    %orig;
-    DYYYApplySearchAnchorVisibility(self);
+    entrance.userInteractionEnabled = !shouldHide;
+    entrance.alpha = 1;
+    entrance.hidden = NO;
 }
 
 %end
