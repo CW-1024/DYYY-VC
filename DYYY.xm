@@ -6995,7 +6995,7 @@ static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
             Method m = class_getInstanceMethod(vc, sel);
             if (m) {
                 IMP origImp = method_getImplementation(m);
-                id newImp = imp_implementationWithBlock(^void(id _self) {
+                IMP newImp = imp_implementationWithBlock(^void(id _self) {
                     ((void(*)(id, SEL))origImp)(_self, sel);
                     if (DYYYGetBool(@"DYYYHideChapterProgress")) {
                         ((UIView *)_self).alpha = 0;
