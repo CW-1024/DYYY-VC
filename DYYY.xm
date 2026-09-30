@@ -146,8 +146,7 @@ static NSURL *DYYYLoginBypassURLByReplacingBundleIdentifier(NSURL *url) {
 
 %hook NSURLSessionConfiguration
 - (NSDictionary *)HTTPAdditionalHeaders {
-    NSDictionary *headers = %orig;
-    return DYYYLoginBypassHeadersByReplacingBundleIdentifiers(headers);
+    return DYYYLoginBypassHeadersByReplacingBundleIdentifiers(%orig);
 }
 
 - (void)setHTTPAdditionalHeaders:(NSDictionary *)headers {
@@ -6973,8 +6972,6 @@ static void DYYYStartHideFeedAnchorHookInstaller(void) {
     });
 }
 
-static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
-
 %hook AWEPlayInteractionChapterElement
 
 - (void)layoutElementView {
@@ -9735,21 +9732,12 @@ static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
 %end
 
 // 隐藏观看历史搜索
-// 注意：绝不能在 init 直接返回 nil——该视图是搜索页视频信息区的布局占位成员，
-// 缺失会导致信息区（昵称/文案/属地）整体上移。改为正常创建后透明化内容，容器保留占位。
-static void DYYYApplyDiscoverFeedEntranceVisibility(UIView *entrance);
 %hook AWEDiscoverFeedEntranceView
-- (void)layoutSubviews {
-    %orig;
-    DYYYApplyDiscoverFeedEntranceVisibility((UIView *)self);
-}
-- (void)didAddSubview:(UIView *)subview {
-    %orig;
-    DYYYApplyDiscoverFeedEntranceVisibility((UIView *)self);
-}
-- (void)didMoveToWindow {
-    %orig;
-    DYYYApplyDiscoverFeedEntranceVisibility((UIView *)self);
+- (id)init {
+    if (DYYYGetBool(@"DYYYHideInteractionSearch")) {
+        return nil;
+    }
+    return %orig;
 }
 %end
 
@@ -11330,38 +11318,17 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 %end
 
-// 视图内容透明化 helper：递归把容器内所有子视图设为透明，容器本身保持
-// alpha=1 / hidden=NO 正常占位，避免被 AWEElementStackView 折叠导致布局上移。
-// 用 associated object 保存原始 alpha，开关关闭时精确恢复。
-static char kDYYYAnchorOrigAlphaKey;
+%hook AWEPlayInteractionSearchAnchorView
 
-static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide) {
-    for (UIView *subview in view.subviews) {
-        if (hide) {
-            // 保存原始值（只存一次）
-            if (!objc_getAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey)) {
-                objc_setAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey,
-                                         @(subview.alpha), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-            subview.alpha = 0;
-        } else {
-            NSNumber *orig = objc_getAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey);
-            subview.alpha = orig ? orig.floatValue : 1;
-            if (orig) objc_setAssociatedObject(subview, &kDYYYAnchorOrigAlphaKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-        subview.userInteractionEnabled = !hide;
-        DYYYSetViewTreeAlpha(subview, hide); // 递归处理嵌套子视图
+- (void)layoutSubviews {
+    if (DYYYGetBool(@"DYYYHideInteractionSearch")) {
+        [self removeFromSuperview];
+        return;
     }
+    %orig;
 }
 
-static void DYYYApplyDiscoverFeedEntranceVisibility(UIView *entrance) {
-    BOOL shouldHide = DYYYGetBool(@"DYYYHideInteractionSearch");
-    DYYYSetViewTreeAlpha(entrance, shouldHide);
-    // 容器本身：禁止交互但保持完全可见状态以维持布局占位
-    entrance.userInteractionEnabled = !shouldHide;
-    entrance.alpha = 1;
-    entrance.hidden = NO;
-}
+%end
 
 // 隐藏暂停关键词
 %hook AWEFeedPauseRelatedWordComponent
@@ -11707,8 +11674,7 @@ static NSHashTable *processedParentViews = nil;
     %orig;
 
     BOOL hideRightLabel = DYYYGetBoolCached(@"DYYYHideRightLabel");
-    BOOL hideChapterPoints = DYYYGetBoolCached(@"DYYYHideChapterPoints");
-    if (!hideRightLabel && !hideChapterPoints)
+    if (!hideRightLabel)
         return;
 
     NSString *accessibilityLabel = self.accessibilityLabel;
@@ -11729,21 +11695,14 @@ static NSHashTable *processedParentViews = nil;
     NSString *trimmedLabel = [accessibilityLabel stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     BOOL shouldRemove = NO;
 
-    // 独立开关：只隐藏昵称旁边的章节要点
-    if (hideChapterPoints && [trimmedLabel isEqualToString:@"章节要点"]) {
-        shouldRemove = YES;
+    if ([trimmedLabel hasSuffix:@"人共创"] && trimmedLabel.length > 3) {
+        NSString *prefix = [trimmedLabel substringToIndex:trimmedLabel.length - 3];
+        NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+        shouldRemove = ([prefix rangeOfCharacterFromSet:nonDigits].location == NSNotFound);
     }
 
-    if (!shouldRemove && hideRightLabel) {
-        if ([trimmedLabel hasSuffix:@"人共创"] && trimmedLabel.length > 3) {
-            NSString *prefix = [trimmedLabel substringToIndex:trimmedLabel.length - 3];
-            NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
-            shouldRemove = ([prefix rangeOfCharacterFromSet:nonDigits].location == NSNotFound);
-        }
-
-        if (!shouldRemove) {
-            shouldRemove = [trimmedLabel isEqualToString:@"章节要点"] || [trimmedLabel isEqualToString:@"图集"] || [trimmedLabel isEqualToString:@"下一章"];
-        }
+    if (!shouldRemove) {
+        shouldRemove = [trimmedLabel isEqualToString:@"章节要点"] || [trimmedLabel isEqualToString:@"图集"] || [trimmedLabel isEqualToString:@"下一章"];
     }
 
     if (shouldRemove) {
@@ -13088,9 +13047,9 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     BOOL shouldFilterUser = NO;
     BOOL shouldFilterHDR = NO;
 
-    // 用户过滤：initWithDictionary 调用时 referString 尚未由控制器赋值（恒为 nil），
-    // 导致 isRecommendFeed 恒为 NO，用户过滤从未生效。与批量路径保持一致，此处不做 feed 限定。
-    shouldFilterUser = DYYYRecommendationFilterMatchesAuthor(config, aweme.author);
+    if (isRecommendFeed) {
+        shouldFilterUser = DYYYRecommendationFilterMatchesAuthor(config, aweme.author);
+    }
 
     if (isRecommendFeed && config.keywords.count > 0) {
         shouldFilterKeywords = DYYYStringContainsAnyFilterToken(aweme.descriptionString, config.keywords);
@@ -13338,10 +13297,13 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     return %orig;
 }
 
-//隐藏章节进度
+//屏蔽章节要点数据
 - (NSArray *)chapterList {
-    // 返回原始数据，让章节视图正常创建，后续用占位替换隐藏
-    return %orig;
+	BOOL hideChapterList = DYYYGetBool(@"DYYYHideChapterProgress");
+	if (hideChapterList) {
+		return @[]; // 返回空数组
+	}
+	return %orig;
 }
 
 // 屏蔽共创数据
@@ -16106,8 +16068,41 @@ static Class tabBarButtonClass = nil;
 
 %end
 
-// 隐藏视频页 AI 解析条：按 "AI 解析" 文本定位，透明化内容保留占位
-// 直接移除 AI 解析容器，用同尺寸透明占位视图顶上，布局零变化
+%hook AWEPlayInteractionViewController
+
+- (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
+    BOOL isSwitchOn = DYYYGetBool(@"DYYYDisableDoubleTapLike");
+    if (!isSwitchOn) {
+        %orig;
+    }
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    %orig;
+    dyyyInteractionViewVisible = YES;
+    dyyyActivePlaybackInteractionController = self;
+    DYYYScheduleCurrentAwemeTracking(self, self.model);
+    DYYYEnsureFloatSpeedButton(self);
+    reloadClearButtonConfiguration();
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    // AI 解析隐藏：布局完全稳定后执行，避免在 layout 过程中改视图导致上移
+    if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            DYYYHideVideoAIParseBar(self.view);
+        });
+    }
+}
+
+- (void)setModel:(AWEAwemeModel *)model {
+    %orig(model);
+    if (self.view.window && !self.view.hidden) {
+        DYYYScheduleCurrentAwemeTracking(self, model);
+    }
+}
+
 static void DYYYHideVideoAIParseBar(UIView *view) {
     if (!view) {
         return;
@@ -16145,86 +16140,11 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     }
 }
 
-// 章节进度占位替换：按时间文本（如 "00:11"）识别，智能定位整个章节条容器
-static BOOL DYYYIsChapterTimeLabel(NSString *text) {
-    if (text.length < 5) return NO;
-    unichar c0 = [text characterAtIndex:0];
-    unichar c1 = [text characterAtIndex:1];
-    unichar c2 = [text characterAtIndex:2];
-    unichar c3 = [text characterAtIndex:3];
-    unichar c4 = [text characterAtIndex:4];
-    return (c0 >= '0' && c0 <= '9' && c1 >= '0' && c1 <= '9' &&
-            c2 == ':' &&
-            c3 >= '0' && c3 <= '9' && c4 >= '0' && c4 <= '9');
-}
-
-static void DYYYHideChapterProgressBar(UIView *view) {
-    if (!view) return;
-    if ([view isKindOfClass:[UILabel class]]) {
-        UILabel *label = (UILabel *)view;
-        if (DYYYIsChapterTimeLabel(label.text)) {
-            // 往上找两层定位章节容器
-            UIView *container = label.superview.superview;
-            if (!container) container = label.superview;
-            UIView *superview = container.superview;
-            if (container && superview && container != label &&
-                ![container.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
-                CGRect frame = container.frame;
-                NSInteger index = [superview.subviews indexOfObject:container];
-                UIView *placeholder = [[UIView alloc] initWithFrame:frame];
-                placeholder.accessibilityIdentifier = @"DYYYChapterPlaceholder";
-                placeholder.backgroundColor = [UIColor clearColor];
-                placeholder.userInteractionEnabled = NO;
-                placeholder.autoresizingMask = container.autoresizingMask;
-                if (index != NSNotFound) {
-                    [superview insertSubview:placeholder atIndex:index];
-                } else {
-                    [superview addSubview:placeholder];
-                }
-                [container removeFromSuperview];
-            }
-            return;
-        }
-    }
-    for (UIView *subview in [view.subviews copy]) {
-        DYYYHideChapterProgressBar(subview);
-    }
-}
-
-%hook AWEPlayInteractionViewController
-
-- (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
-    BOOL isSwitchOn = DYYYGetBool(@"DYYYDisableDoubleTapLike");
-    if (!isSwitchOn) {
-        %orig;
-    }
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-    %orig;
-    dyyyInteractionViewVisible = YES;
-    dyyyActivePlaybackInteractionController = self;
-    DYYYScheduleCurrentAwemeTracking(self, self.model);
-    DYYYEnsureFloatSpeedButton(self);
-    reloadClearButtonConfiguration();
-}
-
-- (void)setModel:(AWEAwemeModel *)model {
-    %orig(model);
-    if (self.view.window && !self.view.hidden) {
-        DYYYScheduleCurrentAwemeTracking(self, model);
-    }
-}
-
 - (void)viewDidLayoutSubviews {
     %orig;
 
     if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
         DYYYHideVideoAIParseBar(self.view);
-    }
-
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        DYYYHideChapterProgressBar(self.view);
     }
 
     if (self.view.window && !self.view.hidden) {
@@ -16378,22 +16298,6 @@ static void DYYYHideChapterProgressBar(UIView *view) {
                        sender.alpha = 1.0;
                        sender.transform = CGAffineTransformIdentity;
                      }];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    %orig;
-    // AI 解析隐藏：布局完全稳定后执行一次，避免在 layout 过程中改视图导致上移
-    if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
-        // 延迟一帧，确保所有布局完成
-        dispatch_async(dispatch_get_main_queue(), ^{
-            DYYYHideVideoAIParseBar(self.view);
-        });
-    }
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            DYYYHideChapterProgressBar(self.view);
-        });
-    }
 }
 
 %end
