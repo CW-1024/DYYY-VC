@@ -16117,15 +16117,17 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
-            // 只清视觉：子视图透明 + 去掉容器边框背景，容器本身保留占位不上移
+            // 最保守：只把文字替换为空格，视图 frame/alpha/约束全都不动
+            // 用空格而非空字符串，避免 UILabel 因空文本收缩高度
+            label.text = @" ";
+            // 同容器内的图标类视图也透明，但不动容器本身
             UIView *container = label.superview;
             if (container) {
                 for (UIView *sub in container.subviews) {
-                    sub.alpha = 0;
-                    sub.userInteractionEnabled = NO;
+                    if ([sub isKindOfClass:[UIImageView class]]) {
+                        sub.alpha = 0;
+                    }
                 }
-                container.layer.borderWidth = 0;
-                container.backgroundColor = [UIColor clearColor];
                 container.userInteractionEnabled = NO;
             }
             return;
