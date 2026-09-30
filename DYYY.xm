@@ -16109,6 +16109,7 @@ static Class tabBarButtonClass = nil;
 %end
 
 // 隐藏视频页 AI 解析条：按 "AI 解析" 文本定位，透明化内容保留占位
+// 直接移除 AI 解析容器，用同尺寸透明占位视图顶上，布局零变化
 static void DYYYHideVideoAIParseBar(UIView *view) {
     if (!view) {
         return;
@@ -16117,16 +16118,26 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
-            // 只清视觉：子视图透明 + 去掉容器边框背景，容器本身保留占位不上移
             UIView *container = label.superview;
-            if (container) {
-                for (UIView *sub in container.subviews) {
-                    sub.alpha = 0;
-                    sub.userInteractionEnabled = NO;
+            UIView *superview = container.superview;
+            // 防止重复处理：检查是否已经是占位视图
+            if (container && superview && ![container.accessibilityIdentifier isEqualToString:@"DYYYAIParsePlaceholder"]) {
+                CGRect frame = container.frame;
+                NSInteger index = [superview.subviews indexOfObject:container];
+                // 创建同尺寸透明占位
+                UIView *placeholder = [[UIView alloc] initWithFrame:frame];
+                placeholder.accessibilityIdentifier = @"DYYYAIParsePlaceholder";
+                placeholder.backgroundColor = [UIColor clearColor];
+                placeholder.userInteractionEnabled = NO;
+                placeholder.autoresizingMask = container.autoresizingMask;
+                placeholder.clipsToBounds = YES;
+                // 先加占位，再移除原容器，保证同一 runloop 内无缝替换
+                if (index != NSNotFound) {
+                    [superview insertSubview:placeholder atIndex:index];
+                } else {
+                    [superview addSubview:placeholder];
                 }
-                container.layer.borderWidth = 0;
-                container.backgroundColor = [UIColor clearColor];
-                container.userInteractionEnabled = NO;
+                [container removeFromSuperview];
             }
             return;
         }
@@ -16164,6 +16175,9 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
 - (void)viewDidLayoutSubviews {
     %orig;
 
+    if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
+        DYYYHideVideoAIParseBar(self.view);
+    }
 
     if (self.view.window && !self.view.hidden) {
         dyyyInteractionViewVisible = YES;
