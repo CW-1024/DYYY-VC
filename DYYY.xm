@@ -6986,6 +6986,25 @@ static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
         BOOL hide = DYYYGetBool(@"DYYYHideChapterProgress");
         elementView.alpha = hide ? 0 : 1;
         elementView.userInteractionEnabled = !hide;
+        // 强制：swizzle 该 view 类的 layoutSubviews，每次布局都按住 alpha
+        static const void *kDYYYChapterSwizzledKey = &kDYYYChapterSwizzledKey;
+        Class vc = [elementView class];
+        if (!objc_getAssociatedObject(vc, kDYYYChapterSwizzledKey)) {
+            objc_setAssociatedObject(vc, kDYYYChapterSwizzledKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            SEL sel = @selector(layoutSubviews);
+            Method m = class_getInstanceMethod(vc, sel);
+            if (m) {
+                IMP origImp = method_getImplementation(m);
+                id newImp = imp_implementationWithBlock(^void(id _self) {
+                    ((void(*)(id, SEL))origImp)(_self, sel);
+                    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+                        ((UIView *)_self).alpha = 0;
+                        ((UIView *)_self).userInteractionEnabled = NO;
+                    }
+                });
+                method_setImplementation(m, newImp);
+            }
+        }
     }
 }
 
@@ -16114,11 +16133,12 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         NSString *text = label.text;
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
             UIView *container = label.superview;
+            // 往上找两层，确保把带边框的容器也藏住
+            if (container.superview) {
+                container = container.superview;
+            }
             if (container) {
-                for (UIView *sub in container.subviews) {
-                    sub.alpha = 0;
-                    sub.userInteractionEnabled = NO;
-                }
+                container.alpha = 0;
                 container.userInteractionEnabled = NO;
             }
             return;
