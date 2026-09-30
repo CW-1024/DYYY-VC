@@ -11361,8 +11361,6 @@ static void DYYYApplyDiscoverFeedEntranceVisibility(UIView *entrance) {
     entrance.hidden = NO;
 }
 
-%end
-
 // 隐藏暂停关键词
 %hook AWEFeedPauseRelatedWordComponent
 
