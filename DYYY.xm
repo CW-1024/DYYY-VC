@@ -13340,9 +13340,7 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
 //隐藏章节进度
 - (NSArray *)chapterList {
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        return @[];
-    }
+    // 返回原始数据，让章节视图正常创建，后续用占位替换隐藏
     return %orig;
 }
 
@@ -16147,6 +16145,52 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     }
 }
 
+// 章节进度占位替换：按时间文本（如 "00:11"）识别章节容器，直接移除用占位顶上
+static BOOL DYYYIsChapterTimeLabel(NSString *text) {
+    if (text.length < 5) return NO;
+    // 匹配 "00:11" 开头的时间格式
+    unichar c0 = [text characterAtIndex:0];
+    unichar c1 = [text characterAtIndex:1];
+    unichar c2 = [text characterAtIndex:2];
+    unichar c3 = [text characterAtIndex:3];
+    unichar c4 = [text characterAtIndex:4];
+    return (c0 >= '0' && c0 <= '9' && c1 >= '0' && c1 <= '9' &&
+            c2 == ':' &&
+            c3 >= '0' && c3 <= '9' && c4 >= '0' && c4 <= '9');
+}
+
+static void DYYYHideChapterProgressBar(UIView *view) {
+    if (!view) return;
+    if ([view isKindOfClass:[UILabel class]]) {
+        UILabel *label = (UILabel *)view;
+        if (DYYYIsChapterTimeLabel(label.text)) {
+            // 往上找两层，定位章节容器（label -> 按钮 -> 章节条）
+            UIView *container = label.superview.superview;
+            if (!container) container = label.superview;
+            UIView *superview = container.superview;
+            if (container && superview && ![container.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
+                CGRect frame = container.frame;
+                NSInteger index = [superview.subviews indexOfObject:container];
+                UIView *placeholder = [[UIView alloc] initWithFrame:frame];
+                placeholder.accessibilityIdentifier = @"DYYYChapterPlaceholder";
+                placeholder.backgroundColor = [UIColor clearColor];
+                placeholder.userInteractionEnabled = NO;
+                placeholder.autoresizingMask = container.autoresizingMask;
+                if (index != NSNotFound) {
+                    [superview insertSubview:placeholder atIndex:index];
+                } else {
+                    [superview addSubview:placeholder];
+                }
+                [container removeFromSuperview];
+            }
+            return;
+        }
+    }
+    for (UIView *subview in [view.subviews copy]) {
+        DYYYHideChapterProgressBar(subview);
+    }
+}
+
 %hook AWEPlayInteractionViewController
 
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
@@ -16177,6 +16221,10 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
 
     if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
         DYYYHideVideoAIParseBar(self.view);
+    }
+
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        DYYYHideChapterProgressBar(self.view);
     }
 
     if (self.view.window && !self.view.hidden) {
@@ -16339,6 +16387,11 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         // 延迟一帧，确保所有布局完成
         dispatch_async(dispatch_get_main_queue(), ^{
             DYYYHideVideoAIParseBar(self.view);
+        });
+    }
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            DYYYHideChapterProgressBar(self.view);
         });
     }
 }
