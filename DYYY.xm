@@ -16119,8 +16119,10 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
             // 终极：只平移 bounds 让内容绘制到可视区域外，frame/约束/alpha 全不动
             // bounds 变化不触发布局，容器占位与原来像素级一致
+            // 用 tag 标记已处理，防止 viewDidLayoutSubviews 重复调用时累加平移
             UIView *container = label.superview;
-            if (container) {
+            if (container && container.tag != 987654) {
+                container.tag = 987654;
                 container.clipsToBounds = YES;
                 CGRect b = container.bounds;
                 // 内容整体上移一个自身高度，彻底移出可视区域
