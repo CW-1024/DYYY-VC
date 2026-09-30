@@ -16199,6 +16199,11 @@ static void DYYYHideChapterProgressBar(UIView *view) {
         UILabel *label = (UILabel *)view;
         if (DYYYIsChapterTimeLabel(label.text)) {
             UIView *container = DYYYFindChapterBarContainer(label);
+            // fallback：如果智能查找没找到（返回 label 本身），用 superview.superview
+            if (container == label) {
+                container = label.superview.superview;
+                if (!container) container = label.superview;
+            }
             UIView *superview = container.superview;
             if (container && superview && container != label &&
                 ![container.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
