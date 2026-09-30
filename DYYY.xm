@@ -16163,9 +16163,25 @@ static void DYYYHideChapterProgressBar(UIView *view) {
     if ([view isKindOfClass:[UILabel class]]) {
         UILabel *label = (UILabel *)view;
         if (DYYYIsChapterTimeLabel(label.text)) {
-            // 往上找两层定位章节容器
-            UIView *container = label.superview.superview;
-            if (!container) container = label.superview;
+            // 智能定位：往上找第一个有背景色或高度在章节条范围内的祖先
+            UIView *container = nil;
+            UIView *current = label.superview;
+            while (current) {
+                CGFloat h = current.frame.size.height;
+                CGFloat w = current.frame.size.width;
+                BOOL hasBG = current.backgroundColor && ![current.backgroundColor isEqual:[UIColor clearColor]] && current.alpha > 0.01;
+                // 章节条特征：有背景色，或高度 20-100 且宽度 >150
+                if (hasBG || (h >= 20 && h <= 100 && w > 150)) {
+                    container = current;
+                    break;
+                }
+                if (current.superview == nil) break;
+                current = current.superview;
+            }
+            if (!container) {
+                container = label.superview.superview;
+                if (!container) container = label.superview;
+            }
             UIView *superview = container.superview;
             if (container && superview && container != label &&
                 ![container.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
