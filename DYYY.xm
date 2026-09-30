@@ -16136,45 +16136,57 @@ static void DYYYHideChapterPills(UIView *view) {
     if ([view isKindOfClass:[UILabel class]]) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
-        // 章节要点按钮
+        // 章节要点按钮：直接hidden移除，不留空格
         if (text.length > 0 && [text containsString:@"章节要点"]) {
             UIView *container = label.superview;
             if (container) {
-                for (UIView *sub in container.subviews) {
-                    sub.alpha = 0;
-                    sub.userInteractionEnabled = NO;
-                }
-                container.layer.borderWidth = 0;
-                container.backgroundColor = [UIColor clearColor];
-                container.userInteractionEnabled = NO;
-                container.alpha = 0;
+                container.hidden = YES;
+            } else {
+                label.hidden = YES;
             }
             return;
         }
+        // 跳过AI解析相关
+        if (text.length > 0 && [text containsString:@"AI"]) {
+            return;
+        }
     }
-    // 底部空章节框：有边框/背景但无文字内容的容器
-    if ([view isKindOfClass:[UIView class]] && ![view isKindOfClass:[UILabel class]] && ![view isKindOfClass:[UIButton class]]) {
+    // 底部章节框（含音频图标）：有边框/背景的容器，直接hidden
+    if ([view isKindOfClass:[UIView class]] && ![view isKindOfClass:[UILabel class]]) {
         BOOL hasBorder = view.layer.borderWidth > 0;
         BOOL hasBackground = view.backgroundColor && CGColorGetAlpha(view.backgroundColor.CGColor) > 0.01;
-        if ((hasBorder || hasBackground) && view.subviews.count <= 2) {
-            BOOL hasText = NO;
+        if (hasBorder || hasBackground) {
+            BOOL hasMeaningfulText = NO;
+            BOOL hasAIText = NO;
+            BOOL hasAudioIcon = NO;
             for (UIView *sub in view.subviews) {
-                if ([sub isKindOfClass:[UILabel class]] && ((UILabel *)sub).text.length > 0) {
-                    hasText = YES;
-                    break;
+                if ([sub isKindOfClass:[UILabel class]]) {
+                    NSString *t = ((UILabel *)sub).text;
+                    if (t.length > 0) {
+                        if ([t containsString:@"AI"]) {
+                            hasAIText = YES;
+                        } else {
+                            hasMeaningfulText = YES;
+                        }
+                    }
+                }
+                if ([sub isKindOfClass:[UIImageView class]]) {
+                    hasAudioIcon = YES;
                 }
             }
-            // 屏幕底部区域的空框
+            // 含AI文字的跳过，不干扰AI解析
+            if (hasAIText) {
+                goto next_subviews;
+            }
             CGRect frame = [view convertRect:view.bounds toView:nil];
             CGFloat screenH = [UIScreen mainScreen].bounds.size.height;
-            if (!hasText && frame.origin.y > screenH * 0.75) {
-                view.layer.borderWidth = 0;
-                view.backgroundColor = [UIColor clearColor];
-                view.alpha = 0;
-                view.userInteractionEnabled = NO;
+            // 底部区域、无有效文字 → 章节框，隐藏
+            if (!hasMeaningfulText && frame.origin.y > screenH * 0.7 && frame.size.height < 100) {
+                view.hidden = YES;
             }
         }
     }
+next_subviews:
     for (UIView *subview in [view.subviews copy]) {
         DYYYHideChapterPills(subview);
     }
