@@ -6980,32 +6980,6 @@ static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
 - (void)layoutElementView {
     %orig;
     DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionChapterElement");
-    // 隐藏章节进度：容器alpha=0，子视图自动继承不可见，但布局占位保留
-    UIView *elementView = DYYYRawElementViewFromElement(self);
-    if (elementView) {
-        BOOL hide = DYYYGetBool(@"DYYYHideChapterProgress");
-        elementView.alpha = hide ? 0 : 1;
-        elementView.userInteractionEnabled = !hide;
-        // 强制：swizzle 该 view 类的 layoutSubviews，每次布局都按住 alpha
-        static const void *kDYYYChapterSwizzledKey = &kDYYYChapterSwizzledKey;
-        Class vc = [elementView class];
-        if (!objc_getAssociatedObject(vc, kDYYYChapterSwizzledKey)) {
-            objc_setAssociatedObject(vc, kDYYYChapterSwizzledKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            SEL sel = @selector(layoutSubviews);
-            Method m = class_getInstanceMethod(vc, sel);
-            if (m) {
-                IMP origImp = method_getImplementation(m);
-                IMP newImp = imp_implementationWithBlock(^void(id _self) {
-                    ((void(*)(id, SEL))origImp)(_self, sel);
-                    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-                        ((UIView *)_self).alpha = 0;
-                        ((UIView *)_self).userInteractionEnabled = NO;
-                    }
-                });
-                method_setImplementation(m, newImp);
-            }
-        }
-    }
 }
 
 %end
@@ -13356,8 +13330,11 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     return %orig;
 }
 
-//隐藏章节进度：数据放行让视图创建占位，容器alpha=0隐藏（子视图自动继承，不影响布局）
+//隐藏章节进度
 - (NSArray *)chapterList {
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        return @[];
+    }
     return %orig;
 }
 
@@ -16132,13 +16109,15 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
+            // 只清视觉：子视图透明 + 去掉容器边框背景，容器本身保留占位不上移
             UIView *container = label.superview;
-            // 往上找两层，确保把带边框的容器也藏住
-            if (container.superview) {
-                container = container.superview;
-            }
             if (container) {
-                container.alpha = 0;
+                for (UIView *sub in container.subviews) {
+                    sub.alpha = 0;
+                    sub.userInteractionEnabled = NO;
+                }
+                container.layer.borderWidth = 0;
+                container.backgroundColor = [UIColor clearColor];
                 container.userInteractionEnabled = NO;
             }
             return;
