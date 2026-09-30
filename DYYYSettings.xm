@@ -3681,6 +3681,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
               @"cellType" : @37,
               @"imageName" : @"ic_eyeslash_outlined_16"
           },
+          @{
+              @"identifier" : @"DYYYHideVideoAIParse",
+              @"title" : @"隐藏视频AI解析",
+              @"subTitle" : @"隐藏视频下方出现的AI解析条",
+              @"detail" : @"",
+              @"cellType" : @37,
+              @"imageName" : @"ic_eyeslash_outlined_16"
+          },
           @{@"identifier" : @"DYYYHidePopover",
             @"title" : @"隐藏上次看到",
             @"detail" : @"",
