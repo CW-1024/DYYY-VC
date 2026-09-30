@@ -6980,6 +6980,13 @@ static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
 - (void)layoutElementView {
     %orig;
     DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionChapterElement");
+    // 隐藏章节进度：容器alpha=0，子视图自动继承不可见，但布局占位保留
+    UIView *elementView = DYYYRawElementViewFromElement(self);
+    if (elementView) {
+        BOOL hide = DYYYGetBool(@"DYYYHideChapterProgress");
+        elementView.alpha = hide ? 0 : 1;
+        elementView.userInteractionEnabled = !hide;
+    }
 }
 
 %end
@@ -13330,11 +13337,8 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     return %orig;
 }
 
-//隐藏章节进度
+//隐藏章节进度：数据放行让视图创建占位，容器alpha=0隐藏（子视图自动继承，不影响布局）
 - (NSArray *)chapterList {
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        return @[];
-    }
     return %orig;
 }
 
