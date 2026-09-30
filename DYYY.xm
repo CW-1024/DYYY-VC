@@ -16111,6 +16111,51 @@ static Class tabBarButtonClass = nil;
 
 %end
 
+// 隐藏视频页 AI 解析条：按 "AI 解析" 文本定位，透明化内容保留占位
+static void DYYYHideVideoAIParseBar(UIView *view) {
+    if (!view) {
+        return;
+    }
+    if ([view isKindOfClass:[UILabel class]]) {
+        UILabel *label = (UILabel *)view;
+        NSString *text = label.text;
+        if (text.length > 0 && [text hasPrefix:@"AI 解析"]) {
+            UIView *container = label.superview;
+            if (container) {
+                for (UIView *sub in container.subviews) {
+                    sub.alpha = 0;
+                    sub.userInteractionEnabled = NO;
+                }
+                container.userInteractionEnabled = NO;
+            }
+            return;
+        }
+    }
+    for (UIView *subview in [view.subviews copy]) {
+        DYYYHideVideoAIParseBar(subview);
+    }
+}
+
+// 隐藏章节进度条：按类名定位，持续透明化（viewDidLayoutSubviews 每次调用）
+static void DYYYHideChapterViews(UIView *view) {
+    if (!view) {
+        return;
+    }
+    NSString *className = NSStringFromClass([view class]);
+    if ([className containsString:@"Chapter"] && [className containsString:@"PlayInteraction"]) {
+        // 找到章节视图，透明化所有子视图，容器保持占位
+        for (UIView *sub in view.subviews) {
+            sub.alpha = 0;
+            sub.userInteractionEnabled = NO;
+        }
+        view.userInteractionEnabled = NO;
+        // 不 return，继续递归处理嵌套的 chapter 视图
+    }
+    for (UIView *subview in [view.subviews copy]) {
+        DYYYHideChapterViews(subview);
+    }
+}
+
 %hook AWEPlayInteractionViewController
 
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
@@ -16138,6 +16183,14 @@ static Class tabBarButtonClass = nil;
 
 - (void)viewDidLayoutSubviews {
     %orig;
+
+    if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
+        DYYYHideVideoAIParseBar(self.view);
+    }
+
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        DYYYHideChapterViews(self.view);
+    }
 
     if (self.view.window && !self.view.hidden) {
         dyyyInteractionViewVisible = YES;
