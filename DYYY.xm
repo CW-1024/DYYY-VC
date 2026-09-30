@@ -11764,7 +11764,7 @@ static NSHashTable *processedParentViews = nil;
 
 %end
 
-// 单独隐藏昵称旁边的章节要点（独立开关，不影响其他功能）
+// 单独隐藏昵称旁边的章节要点（独立开关，彻底移除不留空格）
 %hook UILabel
 - (void)layoutSubviews {
     %orig;
@@ -11778,11 +11778,19 @@ static NSHashTable *processedParentViews = nil;
     NSString *trimmedLabel = [accessibilityLabel stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if ([trimmedLabel isEqualToString:@"章节要点"]) {
         UIView *parentView = self.superview;
-        if (parentView) {
-            parentView.hidden = YES;
-        } else {
-            self.hidden = YES;
-        }
+        if (!parentView || !parentView.superview)
+            return;
+
+        UIView *grandparentView = parentView.superview;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([grandparentView isKindOfClass:[UIStackView class]]) {
+                UIStackView *stackView = (UIStackView *)grandparentView;
+                [stackView removeArrangedSubview:parentView];
+            }
+            [parentView removeFromSuperview];
+            [grandparentView setNeedsLayout];
+            [grandparentView layoutIfNeeded];
+        });
     }
 }
 %end
