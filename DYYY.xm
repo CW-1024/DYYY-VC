@@ -6975,11 +6975,25 @@ static void DYYYStartHideFeedAnchorHookInstaller(void) {
 
 static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
 
+static void DYYYApplyChapterElementVisibility(id element) {
+    BOOL shouldHide = DYYYGetBool(@"DYYYHideChapterProgress");
+    UIView *elementView = DYYYRawElementViewFromElement(element);
+    if (!elementView) {
+        return;
+    }
+    // 放行布局占位，仅透明化内容，避免 AWEElementStackView 坍缩导致上移
+    DYYYSetViewTreeAlpha(elementView, shouldHide);
+    elementView.userInteractionEnabled = !shouldHide;
+    elementView.alpha = 1;
+    elementView.hidden = NO;
+}
+
 %hook AWEPlayInteractionChapterElement
 
 - (void)layoutElementView {
     %orig;
     DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionChapterElement");
+    DYYYApplyChapterElementVisibility(self);
 }
 
 %end
@@ -13330,7 +13344,7 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     return %orig;
 }
 
-//隐藏章节进度：返回单个空章节占位，视图创建但无内容，不上移
+//章节要点数据放行（视图透明化在 AWEPlayInteractionChapterElement 处理，避免布局坍缩上移）
 - (NSArray *)chapterList {
     return %orig;
 }
@@ -16125,6 +16139,25 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     }
 }
 
+// 隐藏章节进度条：按类名定位，持续透明化（viewDidLayoutSubviews 每次调用）
+static void DYYYHideChapterViews(UIView *view) {
+    if (!view) {
+        return;
+    }
+    NSString *className = NSStringFromClass([view class]);
+    if ([className containsString:@"Chapter"] && [className containsString:@"PlayInteraction"]) {
+        // 找到章节视图，透明化所有子视图，容器保持占位
+        for (UIView *sub in view.subviews) {
+            sub.alpha = 0;
+            sub.userInteractionEnabled = NO;
+        }
+        view.userInteractionEnabled = NO;
+        // 不 return，继续递归处理嵌套的 chapter 视图
+    }
+    for (UIView *subview in [view.subviews copy]) {
+        DYYYHideChapterViews(subview);
+    }
+}
 
 %hook AWEPlayInteractionViewController
 
@@ -16156,6 +16189,10 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
 
     if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
         DYYYHideVideoAIParseBar(self.view);
+    }
+
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        DYYYHideChapterViews(self.view);
     }
 
     if (self.view.window && !self.view.hidden) {
