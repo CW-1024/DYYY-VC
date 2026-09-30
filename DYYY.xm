@@ -16158,47 +16158,14 @@ static BOOL DYYYIsChapterTimeLabel(NSString *text) {
             c3 >= '0' && c3 <= '9' && c4 >= '0' && c4 <= '9');
 }
 
-// 统计一个视图子树中时间标签的数量
-static int DYYYCountTimeLabelsInView(UIView *view) {
-    if (!view) return 0;
-    int count = 0;
-    if ([view isKindOfClass:[UILabel class]]) {
-        if (DYYYIsChapterTimeLabel(((UILabel *)view).text)) {
-            count = 1;
-        }
-    }
-    for (UIView *sub in view.subviews) {
-        count += DYYYCountTimeLabelsInView(sub);
-        if (count >= 2) break; // 够了，不用继续
-    }
-    return count;
-}
-
-// 从时间标签往上找：返回第一个包含 >=2 个时间标签的祖先，即整个章节条
-static UIView *DYYYFindChapterBarContainer(UILabel *timeLabel) {
-    UIView *current = timeLabel.superview;
-    while (current) {
-        int count = DYYYCountTimeLabelsInView(current);
-        if (count >= 2) {
-            return current; // 找到就停，不再往上
-        }
-        if (current.superview == nil) break;
-        current = current.superview;
-    }
-    return timeLabel; // 没找到，返回 label 本身（调用方会 fallback）
-}
-
 static void DYYYHideChapterProgressBar(UIView *view) {
     if (!view) return;
     if ([view isKindOfClass:[UILabel class]]) {
         UILabel *label = (UILabel *)view;
         if (DYYYIsChapterTimeLabel(label.text)) {
-            UIView *container = DYYYFindChapterBarContainer(label);
-            // fallback：如果智能查找没找到（返回 label 本身），用 superview.superview
-            if (container == label) {
-                container = label.superview.superview;
-                if (!container) container = label.superview;
-            }
+            // 往上找两层定位章节容器
+            UIView *container = label.superview.superview;
+            if (!container) container = label.superview;
             UIView *superview = container.superview;
             if (container && superview && container != label &&
                 ![container.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
