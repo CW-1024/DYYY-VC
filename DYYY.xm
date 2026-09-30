@@ -6979,26 +6979,6 @@ static void DYYYSetViewTreeAlpha(UIView *view, BOOL hide);
 
 - (void)layoutElementView {
     %orig;
-    // 隐藏章节进度：用占位替换，不上移
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        UIView *elementView = DYYYRawElementViewFromElement(self);
-        UIView *superview = elementView.superview;
-        if (elementView && superview && ![elementView.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
-            CGRect frame = elementView.frame;
-            NSInteger index = [superview.subviews indexOfObject:elementView];
-            UIView *placeholder = [[UIView alloc] initWithFrame:frame];
-            placeholder.accessibilityIdentifier = @"DYYYChapterPlaceholder";
-            placeholder.backgroundColor = [UIColor clearColor];
-            placeholder.userInteractionEnabled = NO;
-            placeholder.autoresizingMask = elementView.autoresizingMask;
-            if (index != NSNotFound) {
-                [superview insertSubview:placeholder atIndex:index];
-            } else {
-                [superview addSubview:placeholder];
-            }
-            [elementView removeFromSuperview];
-        }
-    }
     DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionChapterElement");
 }
 
@@ -13360,7 +13340,9 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
 //隐藏章节进度
 - (NSArray *)chapterList {
-    // 不再返回 @[]，让章节视图正常创建，后续用占位替换方式隐藏（不上移）
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        return @[];
+    }
     return %orig;
 }
 
