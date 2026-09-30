@@ -11707,7 +11707,8 @@ static NSHashTable *processedParentViews = nil;
     %orig;
 
     BOOL hideRightLabel = DYYYGetBoolCached(@"DYYYHideRightLabel");
-    if (!hideRightLabel)
+    BOOL hideChapterPoints = DYYYGetBoolCached(@"DYYYHideChapterPoints");
+    if (!hideRightLabel && !hideChapterPoints)
         return;
 
     NSString *accessibilityLabel = self.accessibilityLabel;
@@ -11728,14 +11729,21 @@ static NSHashTable *processedParentViews = nil;
     NSString *trimmedLabel = [accessibilityLabel stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     BOOL shouldRemove = NO;
 
-    if ([trimmedLabel hasSuffix:@"人共创"] && trimmedLabel.length > 3) {
-        NSString *prefix = [trimmedLabel substringToIndex:trimmedLabel.length - 3];
-        NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
-        shouldRemove = ([prefix rangeOfCharacterFromSet:nonDigits].location == NSNotFound);
+    // 独立开关：只隐藏昵称旁边的章节要点
+    if (hideChapterPoints && [trimmedLabel isEqualToString:@"章节要点"]) {
+        shouldRemove = YES;
     }
 
-    if (!shouldRemove) {
-        shouldRemove = [trimmedLabel isEqualToString:@"章节要点"] || [trimmedLabel isEqualToString:@"图集"] || [trimmedLabel isEqualToString:@"下一章"];
+    if (!shouldRemove && hideRightLabel) {
+        if ([trimmedLabel hasSuffix:@"人共创"] && trimmedLabel.length > 3) {
+            NSString *prefix = [trimmedLabel substringToIndex:trimmedLabel.length - 3];
+            NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+            shouldRemove = ([prefix rangeOfCharacterFromSet:nonDigits].location == NSNotFound);
+        }
+
+        if (!shouldRemove) {
+            shouldRemove = [trimmedLabel isEqualToString:@"章节要点"] || [trimmedLabel isEqualToString:@"图集"] || [trimmedLabel isEqualToString:@"下一章"];
+        }
     }
 
     if (shouldRemove) {
@@ -11762,37 +11770,6 @@ static NSHashTable *processedParentViews = nil;
     }
 }
 
-%end
-
-// 单独隐藏昵称旁边的章节要点（独立开关，彻底移除不留空格）
-%hook UILabel
-- (void)layoutSubviews {
-    %orig;
-    if (!DYYYGetBoolCached(@"DYYYHideChapterPoints"))
-        return;
-
-    NSString *accessibilityLabel = self.accessibilityLabel;
-    if (!accessibilityLabel || accessibilityLabel.length == 0)
-        return;
-
-    NSString *trimmedLabel = [accessibilityLabel stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    if ([trimmedLabel isEqualToString:@"章节要点"]) {
-        UIView *parentView = self.superview;
-        if (!parentView || !parentView.superview)
-            return;
-
-        UIView *grandparentView = parentView.superview;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if ([grandparentView isKindOfClass:[UIStackView class]]) {
-                UIStackView *stackView = (UIStackView *)grandparentView;
-                [stackView removeArrangedSubview:parentView];
-            }
-            [parentView removeFromSuperview];
-            [grandparentView setNeedsLayout];
-            [grandparentView layoutIfNeeded];
-        });
-    }
-}
 %end
 
 // 隐藏顶栏关注下的提示线
