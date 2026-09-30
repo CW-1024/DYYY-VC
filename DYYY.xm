@@ -16128,6 +16128,9 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
                         sub.alpha = 0;
                     }
                 }
+                // 边框和背景是纯视觉属性，不影响布局
+                container.layer.borderWidth = 0;
+                container.backgroundColor = [UIColor clearColor];
                 container.userInteractionEnabled = NO;
             }
             return;
