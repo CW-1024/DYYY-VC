@@ -9739,15 +9739,15 @@ static void DYYYApplyDiscoverFeedEntranceVisibility(UIView *entrance);
 %hook AWEDiscoverFeedEntranceView
 - (void)layoutSubviews {
     %orig;
-    DYYYApplyDiscoverFeedEntranceVisibility(self);
+    DYYYApplyDiscoverFeedEntranceVisibility((UIView *)self);
 }
 - (void)didAddSubview:(UIView *)subview {
     %orig;
-    DYYYApplyDiscoverFeedEntranceVisibility(self);
+    DYYYApplyDiscoverFeedEntranceVisibility((UIView *)self);
 }
 - (void)didMoveToWindow {
     %orig;
-    DYYYApplyDiscoverFeedEntranceVisibility(self);
+    DYYYApplyDiscoverFeedEntranceVisibility((UIView *)self);
 }
 %end
 
