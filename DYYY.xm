@@ -16117,16 +16117,15 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
         UILabel *label = (UILabel *)view;
         NSString *text = label.text;
         if (text.length > 0 && ([text hasPrefix:@"AI 解析"] || [text hasPrefix:@"AI解析"] || [text containsString:@"AI 解析"])) {
-            // 文字保留但设透明色，高度与原来完全一致，布局零变化
+            // 终极：只平移 bounds 让内容绘制到可视区域外，frame/约束/alpha 全不动
+            // bounds 变化不触发布局，容器占位与原来像素级一致
             UIView *container = label.superview;
             if (container) {
-                for (UIView *sub in container.subviews) {
-                    if ([sub isKindOfClass:[UILabel class]]) {
-                        ((UILabel *)sub).textColor = [UIColor clearColor];
-                    } else if ([sub isKindOfClass:[UIImageView class]]) {
-                        sub.alpha = 0;
-                    }
-                }
+                container.clipsToBounds = YES;
+                CGRect b = container.bounds;
+                // 内容整体上移一个自身高度，彻底移出可视区域
+                container.bounds = CGRectMake(b.origin.x, b.origin.y - b.size.height - 10,
+                                              b.size.width, b.size.height);
                 container.layer.borderWidth = 0;
                 container.backgroundColor = [UIColor clearColor];
                 container.userInteractionEnabled = NO;
