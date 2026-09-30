@@ -16151,38 +16151,32 @@ static void DYYYHideChapterPills(UIView *view) {
             return;
         }
     }
-    // 底部章节框（含音频图标）：有边框/背景的容器，直接hidden
-    if ([view isKindOfClass:[UIView class]] && ![view isKindOfClass:[UILabel class]]) {
-        BOOL hasBorder = view.layer.borderWidth > 0;
-        BOOL hasBackground = view.backgroundColor && CGColorGetAlpha(view.backgroundColor.CGColor) > 0.01;
-        if (hasBorder || hasBackground) {
-            BOOL hasMeaningfulText = NO;
-            BOOL hasAIText = NO;
-            BOOL hasAudioIcon = NO;
-            for (UIView *sub in view.subviews) {
-                if ([sub isKindOfClass:[UILabel class]]) {
-                    NSString *t = ((UILabel *)sub).text;
-                    if (t.length > 0) {
-                        if ([t containsString:@"AI"]) {
-                            hasAIText = YES;
-                        } else {
-                            hasMeaningfulText = YES;
-                        }
-                    }
-                }
-                if ([sub isKindOfClass:[UIImageView class]]) {
-                    hasAudioIcon = YES;
-                }
+    // 底部章节框：只清视觉不hidden（和AI解析同方案，不上移）
+    // 保守条件：贴底小容器 + 有图标子视图 + 无任何文字
+    if ([view isKindOfClass:[UIView class]] && ![view isKindOfClass:[UILabel class]] && ![view isKindOfClass:[UIImageView class]] && ![view isKindOfClass:[UIButton class]]) {
+        BOOL hasImageSubview = NO;
+        BOOL hasAnyText = NO;
+        for (UIView *sub in view.subviews) {
+            if ([sub isKindOfClass:[UILabel class]] && ((UILabel *)sub).text.length > 0) {
+                hasAnyText = YES;
+                break;
             }
-            // 含AI文字的跳过，不干扰AI解析
-            if (hasAIText) {
-                goto next_subviews;
+            if ([sub isKindOfClass:[UIImageView class]]) {
+                hasImageSubview = YES;
             }
+        }
+        if (!hasAnyText && hasImageSubview) {
             CGRect frame = [view convertRect:view.bounds toView:nil];
             CGFloat screenH = [UIScreen mainScreen].bounds.size.height;
-            // 底部区域、无有效文字 → 章节框，隐藏
-            if (!hasMeaningfulText && frame.origin.y > screenH * 0.7 && frame.size.height < 100) {
-                view.hidden = YES;
+            // 贴底 + 小高度 → 章节音频框
+            if (frame.origin.y > screenH * 0.8 && frame.size.height < 60) {
+                for (UIView *sub in view.subviews) {
+                    sub.alpha = 0;
+                    sub.userInteractionEnabled = NO;
+                }
+                view.layer.borderWidth = 0;
+                view.backgroundColor = [UIColor clearColor];
+                view.userInteractionEnabled = NO;
             }
         }
     }
