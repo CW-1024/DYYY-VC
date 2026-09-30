@@ -16128,6 +16128,58 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     }
 }
 
+// 隐藏章节要点按钮和底部空章节框：只清视觉保留占位
+static void DYYYHideChapterPills(UIView *view) {
+    if (!view) {
+        return;
+    }
+    if ([view isKindOfClass:[UILabel class]]) {
+        UILabel *label = (UILabel *)view;
+        NSString *text = label.text;
+        // 章节要点按钮
+        if (text.length > 0 && [text containsString:@"章节要点"]) {
+            UIView *container = label.superview;
+            if (container) {
+                for (UIView *sub in container.subviews) {
+                    sub.alpha = 0;
+                    sub.userInteractionEnabled = NO;
+                }
+                container.layer.borderWidth = 0;
+                container.backgroundColor = [UIColor clearColor];
+                container.userInteractionEnabled = NO;
+                container.alpha = 0;
+            }
+            return;
+        }
+    }
+    // 底部空章节框：有边框/背景但无文字内容的容器
+    if ([view isKindOfClass:[UIView class]] && ![view isKindOfClass:[UILabel class]] && ![view isKindOfClass:[UIButton class]]) {
+        BOOL hasBorder = view.layer.borderWidth > 0;
+        BOOL hasBackground = view.backgroundColor && CGColorGetAlpha(view.backgroundColor.CGColor) > 0.01;
+        if ((hasBorder || hasBackground) && view.subviews.count <= 2) {
+            BOOL hasText = NO;
+            for (UIView *sub in view.subviews) {
+                if ([sub isKindOfClass:[UILabel class]] && ((UILabel *)sub).text.length > 0) {
+                    hasText = YES;
+                    break;
+                }
+            }
+            // 屏幕底部区域的空框
+            CGRect frame = [view convertRect:view.bounds toView:nil];
+            CGFloat screenH = [UIScreen mainScreen].bounds.size.height;
+            if (!hasText && frame.origin.y > screenH * 0.75) {
+                view.layer.borderWidth = 0;
+                view.backgroundColor = [UIColor clearColor];
+                view.alpha = 0;
+                view.userInteractionEnabled = NO;
+            }
+        }
+    }
+    for (UIView *subview in [view.subviews copy]) {
+        DYYYHideChapterPills(subview);
+    }
+}
+
 %hook AWEPlayInteractionViewController
 
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
@@ -16158,6 +16210,10 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
 
     if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
         DYYYHideVideoAIParseBar(self.view);
+    }
+
+    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
+        DYYYHideChapterPills(self.view);
     }
 
     if (self.view.window && !self.view.hidden) {
