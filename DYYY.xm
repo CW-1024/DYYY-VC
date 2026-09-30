@@ -16145,10 +16145,9 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     }
 }
 
-// 章节进度占位替换：按时间文本（如 "00:11"）识别章节容器，直接移除用占位顶上
+// 章节进度占位替换：按时间文本（如 "00:11"）识别，智能定位整个章节条容器
 static BOOL DYYYIsChapterTimeLabel(NSString *text) {
     if (text.length < 5) return NO;
-    // 匹配 "00:11" 开头的时间格式
     unichar c0 = [text characterAtIndex:0];
     unichar c1 = [text characterAtIndex:1];
     unichar c2 = [text characterAtIndex:2];
@@ -16159,16 +16158,50 @@ static BOOL DYYYIsChapterTimeLabel(NSString *text) {
             c3 >= '0' && c3 <= '9' && c4 >= '0' && c4 <= '9');
 }
 
+// 统计一个视图子树中时间标签的数量
+static int DYYYCountTimeLabelsInView(UIView *view) {
+    if (!view) return 0;
+    int count = 0;
+    if ([view isKindOfClass:[UILabel class]]) {
+        if (DYYYIsChapterTimeLabel(((UILabel *)view).text)) {
+            count = 1;
+        }
+    }
+    for (UIView *sub in view.subviews) {
+        count += DYYYCountTimeLabelsInView(sub);
+        if (count >= 2) break; // 够了，不用继续
+    }
+    return count;
+}
+
+// 从时间标签往上找：找到包含 >=2 个时间标签的最小祖先，即整个章节条
+static UIView *DYYYFindChapterBarContainer(UILabel *timeLabel) {
+    UIView *candidate = timeLabel;
+    UIView *current = timeLabel.superview;
+    while (current) {
+        int count = DYYYCountTimeLabelsInView(current);
+        if (count >= 2) {
+            candidate = current; // 包含多个时间标签，继续往上看有没有更大的
+        } else if (candidate != timeLabel) {
+            // 已经找到过包含多个的，当前这个只包含1个（或0个），说明上一层就是章节条
+            break;
+        }
+        // 防止一直找到根视图：章节条宽度应该接近屏幕宽但不是全屏
+        if (current.superview == nil) break;
+        current = current.superview;
+    }
+    return candidate;
+}
+
 static void DYYYHideChapterProgressBar(UIView *view) {
     if (!view) return;
     if ([view isKindOfClass:[UILabel class]]) {
         UILabel *label = (UILabel *)view;
         if (DYYYIsChapterTimeLabel(label.text)) {
-            // 往上找两层，定位章节容器（label -> 按钮 -> 章节条）
-            UIView *container = label.superview.superview;
-            if (!container) container = label.superview;
+            UIView *container = DYYYFindChapterBarContainer(label);
             UIView *superview = container.superview;
-            if (container && superview && ![container.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
+            if (container && superview && container != label &&
+                ![container.accessibilityIdentifier isEqualToString:@"DYYYChapterPlaceholder"]) {
                 CGRect frame = container.frame;
                 NSInteger index = [superview.subviews indexOfObject:container];
                 UIView *placeholder = [[UIView alloc] initWithFrame:frame];
