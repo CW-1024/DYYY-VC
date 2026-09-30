@@ -13332,9 +13332,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
 //隐藏章节进度：返回单个空章节占位，视图创建但无内容，不上移
 - (NSArray *)chapterList {
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        return @[@{}];
-    }
     return %orig;
 }
 
@@ -16128,63 +16125,6 @@ static void DYYYHideVideoAIParseBar(UIView *view) {
     }
 }
 
-// 隐藏章节要点按钮和底部空章节框：只清视觉保留占位
-static void DYYYHideChapterPills(UIView *view) {
-    if (!view) {
-        return;
-    }
-    if ([view isKindOfClass:[UILabel class]]) {
-        UILabel *label = (UILabel *)view;
-        NSString *text = label.text;
-        // 章节要点按钮：直接hidden移除，不留空格
-        if (text.length > 0 && [text containsString:@"章节要点"]) {
-            UIView *container = label.superview;
-            if (container) {
-                container.hidden = YES;
-            } else {
-                label.hidden = YES;
-            }
-            return;
-        }
-        // 跳过AI解析相关
-        if (text.length > 0 && [text containsString:@"AI"]) {
-            return;
-        }
-    }
-    // 底部章节框：只清视觉不hidden（和AI解析同方案，不上移）
-    // 保守条件：贴底小容器 + 有图标子视图 + 无任何文字
-    if ([view isKindOfClass:[UIView class]] && ![view isKindOfClass:[UILabel class]] && ![view isKindOfClass:[UIImageView class]] && ![view isKindOfClass:[UIButton class]]) {
-        BOOL hasImageSubview = NO;
-        BOOL hasAnyText = NO;
-        for (UIView *sub in view.subviews) {
-            if ([sub isKindOfClass:[UILabel class]] && ((UILabel *)sub).text.length > 0) {
-                hasAnyText = YES;
-                break;
-            }
-            if ([sub isKindOfClass:[UIImageView class]]) {
-                hasImageSubview = YES;
-            }
-        }
-        if (!hasAnyText && hasImageSubview) {
-            CGRect frame = [view convertRect:view.bounds toView:nil];
-            CGFloat screenH = [UIScreen mainScreen].bounds.size.height;
-            // 贴底 + 小高度 → 章节音频框
-            if (frame.origin.y > screenH * 0.8 && frame.size.height < 60) {
-                for (UIView *sub in view.subviews) {
-                    sub.alpha = 0;
-                    sub.userInteractionEnabled = NO;
-                }
-                view.layer.borderWidth = 0;
-                view.backgroundColor = [UIColor clearColor];
-                view.userInteractionEnabled = NO;
-            }
-        }
-    }
-next_subviews:
-    for (UIView *subview in [view.subviews copy]) {
-        DYYYHideChapterPills(subview);
-    }
-}
 
 %hook AWEPlayInteractionViewController
 
@@ -16216,10 +16156,6 @@ next_subviews:
 
     if (DYYYGetBool(@"DYYYHideVideoAIParse")) {
         DYYYHideVideoAIParseBar(self.view);
-    }
-
-    if (DYYYGetBool(@"DYYYHideChapterProgress")) {
-        DYYYHideChapterPills(self.view);
     }
 
     if (self.view.window && !self.view.hidden) {
