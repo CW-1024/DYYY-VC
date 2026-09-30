@@ -11764,6 +11764,29 @@ static NSHashTable *processedParentViews = nil;
 
 %end
 
+// 单独隐藏昵称旁边的章节要点（独立开关，不影响其他功能）
+%hook UILabel
+- (void)layoutSubviews {
+    %orig;
+    if (!DYYYGetBoolCached(@"DYYYHideChapterPoints"))
+        return;
+
+    NSString *accessibilityLabel = self.accessibilityLabel;
+    if (!accessibilityLabel || accessibilityLabel.length == 0)
+        return;
+
+    NSString *trimmedLabel = [accessibilityLabel stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    if ([trimmedLabel isEqualToString:@"章节要点"]) {
+        UIView *parentView = self.superview;
+        if (parentView) {
+            parentView.hidden = YES;
+        } else {
+            self.hidden = YES;
+        }
+    }
+}
+%end
+
 // 隐藏顶栏关注下的提示线
 %hook AWEFeedMultiTabSelectedContainerView
 
