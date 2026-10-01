@@ -16068,6 +16068,8 @@ static Class tabBarButtonClass = nil;
 
 %end
 
+static void DYYYHideVideoAIParseBar(UIView *view);
+
 %hook AWEPlayInteractionViewController
 
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1 {
